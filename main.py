@@ -216,7 +216,7 @@ HTML_TEMPLATE = """
 
 <div class="container">
     <div class="brand">NovaCore Studio</div>
-    <h1>مساعد الواجبات الذكي</h1>
+    <h1>مساعد حل الواجبات</h1>
     <p class="subtitle">ارفع صورة المسألة وسيحلها الذكاء الاصطناعي بالتفصيل</p>
     
     <div class="upload-section" onclick="document.getElementById('fileInput').click()">

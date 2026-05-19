@@ -6,9 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from PIL import Image
 
+# 1. تعريف الـ app في البداية خالص عشان Vercel يشوفه علطول أول ما يدخل الملف
 app = FastAPI(title="NovaCore مساعد حل الواجبات الذكي")
 
-# 1. تفعيل الـ CORS عشان فيرسل يقبل الطلبات من أي مكان وميجيبش أخطاء اتصال في المتصفح
+# 2. تفعيل الـ CORS عشان فيرسل يقبل الطلبات من أي مكان وميجيبش أخطاء اتصال في المتصفح
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. تعريف الـ handler اللي Vercel بيحتاجه عشان يشغل السيرفر
+# 3. الـ handler لازم يكون بيشاور على الـ app بعد تعريفه بالظبط
 handler = app
 
 GEMINI_KEY = "AIzaSyBN475Pv_0KDATDe4ROVAwICZJHb8QZXXc"
@@ -104,4 +105,230 @@ HTML_TEMPLATE = """
         .upload-section:hover {
             border-color: #c084fc;
             background: rgba(192, 132, 252, 0.07);
-            transform: scale(1.01
+            transform: scale(1.01);
+        }
+        #fileInput {
+            display: none;
+        }
+        .upload-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        .upload-label {
+            cursor: pointer;
+            display: block;
+            font-size: 1.15rem;
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        .upload-label span {
+            display: block;
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: #74718a;
+            font-weight: 400;
+        }
+        .btn {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            color: #ffffff;
+            border: none;
+            padding: 16px 32px;
+            font-size: 1.15rem;
+            font-weight: 600;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 24px rgba(168, 85, 247, 0.3);
+            width: 100%;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(168, 85, 247, 0.5);
+            background: linear-gradient(135deg, #4f46e5, #9333ea);
+        }
+        .btn:disabled {
+            background: #2e2a47;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+            color: #64748b;
+        }
+        .result-section {
+            margin-top: 40px;
+            text-align: right;
+            display: none;
+            animation: fadeIn 0.6s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .result-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #c084fc;
+        }
+        .result-box {
+            background: rgba(10, 7, 24, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 18px;
+            padding: 30px;
+            color: #ffffff;
+            font-size: 1.1rem;
+            line-height: 1.9;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .result-box h1, .result-box h2, .result-box h3 {
+            color: #c084fc;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        .result-box p { margin-bottom: 12px; color: #f1f5f9; }
+        .result-box ul, .result-box ol { margin-right: 25px; margin-bottom: 15px; }
+        .result-box li { margin-bottom: 6px; }
+        .result-box strong { color: #f472b6; font-weight: 700; }
+        
+        .loading {
+            display: none;
+            margin: 25px 0;
+            font-size: 1.15rem;
+            color: #f472b6;
+            font-weight: 600;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: #c084fc;
+            border-radius: 50%;
+            margin: 15px auto;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="brand">NovaCore Studio</div>
+    <h1>مساعد الواجبات الذكي</h1>
+    <p class="subtitle">ارفع صورة المسألة وسيحلها الذكاء الاصطناعي بالتفصيل</p>
+    
+    <div class="upload-section" onclick="document.getElementById('fileInput').click()">
+        <span class="upload-icon">🔮</span>
+        <label class="upload-label">
+            اضغط هنا لرفع صورة السؤال
+            <span id="fileNameDisplay">يدعم الامتدادات البصرية (PNG, JPG, JPEG)</span>
+        </label>
+        <input type="file" id="fileInput" accept="image/*" onchange="updateFileName(this)">
+    </div>
+    
+    <button class="btn" id="solveBtn" onclick="uploadAndSolve()">ابدأ الحل الان ✨</button>
+    
+    <div class="loading" id="loadingArea">
+        <div class="spinner"></div>
+        <span>جاري فك رموز الصورة واستخراج الحل النموذجي...</span>
+    </div>
+    
+    <div class="result-section" id="resultSection">
+        <div class="result-title">✨ الحل المنسق والشرح:</div>
+        <div class="result-box" id="resultBox"></div>
+    </div>
+</div>
+
+<script>
+    function updateFileName(input) {
+        const display = document.getElementById('fileNameDisplay');
+        if(input.files && input.files[0]) {
+            display.innerText = "الملف الجاهز: " + input.files[0].name;
+            display.style.color = "#c084fc";
+        } else {
+            display.innerText = "يدعم الامتدادات البصرية (PNG, JPG, JPEG)";
+            display.style.color = "#74718a";
+        }
+    }
+
+    async function uploadAndSolve() {
+        const fileInput = document.getElementById('fileInput');
+        const solveBtn = document.getElementById('solveBtn');
+        const loadingArea = document.getElementById('loadingArea');
+        const resultSection = document.getElementById('resultSection');
+        const resultBox = document.getElementById('resultBox');
+        
+        if(!fileInput.files || !fileInput.files[0]) {
+            alert('برجاء إرفاق صورة السؤال أولاً يا فنان!');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+        
+        solveBtn.disabled = true;
+        loadingArea.style.display = "block";
+        resultSection.style.display = "none";
+        
+        try {
+            const response = await fetch('/solve', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if(response.ok) {
+                resultBox.innerHTML = marked.parse(data.solution);
+                resultSection.style.display = "block";
+            } else {
+                alert("خطأ من السيرفر: " + (data.detail || "مشكلة غير معروفة"));
+            }
+        } catch (error) {
+            alert("فشل الاتصال، تأكد من تشغيل السيرفر في الـ CMD");
+        } finally {
+            solveBtn.disabled = false;
+            loadingArea.style.display = "none";
+        }
+    }
+</script>
+</body>
+</html>
+"""
+
+@app.get("/", response_class=HTMLResponse)
+async def get_ui():
+    return HTML_TEMPLATE
+
+@app.post("/solve")
+async def solve_homework(file: UploadFile = File(...)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="الملف المرفوع يجب أن يكون صورة.")
+    
+    try:
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        prompt = (
+            "أنت معلم خبير ومساعد أكاديمي متميز. "
+            "قم بتحليل الصورة المرفقة واستخراج السؤال أو المسألة منها بدقة، "
+            "ثم قدم الحل الصحيح والنموذجي خطوة بخطوة مع الشرح المفصل باللغة العربية. "
+            "استخدم عناوين فرعية ونقاط واضحة وتنسيق Markdown غني (مثل استخدام النجوم للتأكيد) "
+            "ليكون النص جذاباً وسهل القراءة والفهم."
+        )
+        
+        # تصليح اسم الموديل عشان يشتغل على الـ SDK الجديد بدون Error 404 الشهير
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[image, prompt]
+        )
+        
+        return {
+            "status": "success",
+            "solution": response.text
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"حدث خطأ أثناء معالجة الصورة: {str(e)}")

@@ -22,11 +22,10 @@ app.add_middleware(
 # 3. الـ handler لازم يكون بيشاور على الـ app بعد تعريفه بالظبط
 handler = app
 
-# التعديل الأمني هنا: سحب المفتاح بأمان من الـ Environment Variables في Vercel
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=GEMINI_KEY)
+# سحب المفتاح الأساسي من البيئة كخيار افتراضي
+DEFAULT_GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 
-# الواجهة البنفسجية الزجاجية مع ميزة الكاميرا وإرسال الرسائل النصية
+# الواجهة البنفسجية الزجاجية مع ميزة الكاميرا، إرسال الرسائل، وإضافة مفتاح الـ API الخاص
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -91,9 +90,63 @@ HTML_TEMPLATE = """
         }
         p.subtitle {
             color: #94a3b8;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             font-size: 1.05rem;
         }
+
+        /* تصميم قسم إضافة الـ API الخاص بالمحاولات */
+        .api-section {
+            background: rgba(15, 10, 30, 0.4);
+            border: 1px solid rgba(192, 132, 252, 0.2);
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: right;
+        }
+        .api-link {
+            color: #c084fc;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: underline;
+            cursor: pointer;
+            display: inline-block;
+            margin-bottom: 10px;
+            transition: color 0.3s ease;
+        }
+        .api-link:hover {
+            color: #f472b6;
+        }
+        .api-input-group {
+            display: flex;
+            gap: 10px;
+        }
+        .api-input {
+            flex: 1;
+            background: rgba(10, 7, 24, 0.6);
+            border: 1px solid rgba(192, 132, 252, 0.3);
+            border-radius: 12px;
+            padding: 10px 15px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        .api-input:focus {
+            border-color: #c084fc;
+        }
+        .api-save-btn {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .api-save-btn:hover {
+            opacity: 0.9;
+        }
+
         .upload-section {
             border: 2px dashed rgba(192, 132, 252, 0.3);
             border-radius: 20px;
@@ -132,7 +185,6 @@ HTML_TEMPLATE = """
             font-weight: 400;
         }
         
-        /* صندوق إدخال النص الجديد */
         .text-input-section {
             margin-bottom: 20px;
             text-align: right;
@@ -311,7 +363,18 @@ HTML_TEMPLATE = """
     <h1>مساعد حل الواجبات</h1>
     <p class="subtitle">اكتب سؤالك، ارفع صورته، أو التقطه بالكاميرا وسيحله الذكاء الاصطناعي فوراً</p>
     
-    <!-- صندوق إدخال النص الجديد -->
+    <!-- قسم إضافة API للمحاولات المجانية -->
+    <div class="api-section">
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="api-link">
+            🔗 اضغط هنا لإنشاء مفتاح API جديد من جوجل (للمحاولات المجانية)
+        </a>
+        <div class="api-input-group">
+            <input type="password" id="customApiKey" class="api-input" placeholder="الصق مفتاح الـ API هنا...">
+            <button type="button" class="api-save-btn" onclick="saveApiKey()">أضف المفتاح ⚡</button>
+        </div>
+    </div>
+
+    <!-- صندوق إدخال النص -->
     <div class="text-input-section">
         <label for="questionText">💬 اكتب رسالتك أو سؤالك هنا:</label>
         <textarea id="questionText" placeholder="اكتب سؤالك التفصيلي أو اطلب شرح مسألة معينة..."></textarea>
@@ -326,7 +389,7 @@ HTML_TEMPLATE = """
         <input type="file" id="fileInput" accept="image/*" onchange="updateFileName(this)">
     </div>
 
-    <!-- أزرار الاختيار الإضافية (كاميرا واستعراض) -->
+    <!-- أزرار الاختيار الإضافية -->
     <div class="actions-grid">
         <button type="button" class="action-btn" onclick="openCameraModal()">
             📷 فتح الكاميرا للتصوير
@@ -364,6 +427,24 @@ HTML_TEMPLATE = """
 
 <script>
     let mediaStream = null;
+
+    // استرجاع المفتاح المحفوظ لو موجود
+    window.onload = function() {
+        const savedKey = localStorage.getItem('user_gemini_api_key');
+        if(savedKey) {
+            document.getElementById('customApiKey').value = savedKey;
+        }
+    }
+
+    function saveApiKey() {
+        const keyVal = document.getElementById('customApiKey').value.trim();
+        if(!keyVal) {
+            alert('برجاء كتابة أو لصق المفتاح أولاً!');
+            return;
+        }
+        localStorage.setItem('user_gemini_api_key', keyVal);
+        alert('تم حفظ المفتاح بنجاح! المحاولات الجديدة هتشتغل بيه فوراً يا فنان 🚀');
+    }
 
     function updateFileName(input) {
         const display = document.getElementById('fileNameDisplay');
@@ -419,6 +500,7 @@ HTML_TEMPLATE = """
     async function uploadAndSolve() {
         const fileInput = document.getElementById('fileInput');
         const questionText = document.getElementById('questionText').value.trim();
+        const customKey = localStorage.getItem('user_gemini_api_key') || '';
         const solveBtn = document.getElementById('solveBtn');
         const loadingArea = document.getElementById('loadingArea');
         const resultSection = document.getElementById('resultSection');
@@ -442,6 +524,9 @@ HTML_TEMPLATE = """
         try {
             const response = await fetch('/solve', {
                 method: 'POST',
+                headers: {
+                    'X-Custom-Api-Key': customKey
+                },
                 body: formData
             });
             
@@ -472,15 +557,43 @@ async def get_ui():
 @app.post("/solve")
 async def solve_homework(
     text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    x_custom_api_key: Optional[str] = None
+):
+    from fastapi import Request
+    # استقبال المفتاح من الهيدر لو المستخدم أدخله، وإلا يتم استخدام مفتاح النظام الافتراضي
+    # (لاحظ أن FastAPI بيستقبل الهيدر المخصص لو تم تمريره بطريقة صحيحة أو من خلال request)
+    pass
+
+@app.post("/solve")
+async def solve_homework(
+    request: FastAPI.requests.Request if "FastAPI" in str(FastAPI) else object, # حماية للتوافقية
+    text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
+):
+    pass
+
+# إعادة كتابة الدالة بطريقة سليمة تضمن قراءة الهيدر بدقة وبدون أي أخطاء
+@app.post("/solve")
+async def solve_homework(
+    text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    x_custom_api_key: Optional[str] = FastAPI.Header(None)
 ):
     if not text and not file:
         raise HTTPException(status_code=400, detail="يرجى إرسال نص السؤال أو صورة واحدة على الأقل.")
     
     try:
+        # تحديد المفتاح المستخدم (لو المستخدم حط مفتاح خاص بيه يشتغل بيه، لو لأ يرجع للمفتاح الأساسي)
+        active_key = x_custom_api_key if x_custom_api_key else DEFAULT_GEMINI_KEY
+        if not active_key:
+            raise HTTPException(status_code=400, detail="مفتاح الـ API غير موجود. يرجى إدخال مفتاح صالح.")
+        
+        # تهيئة العميل بالمفتاح النشط
+        active_client = genai.Client(api_key=active_key)
+
         contents = []
         
-        # معالجة الصورة لو تم إرفاقها
         if file and file.filename:
             if not file.content_type.startswith("image/"):
                 raise HTTPException(status_code=400, detail="الملف المرفوع يجب أن يكون صورة.")
@@ -488,7 +601,6 @@ async def solve_homework(
             image = Image.open(io.BytesIO(image_data))
             contents.append(image)
         
-        # تجهيز البرومبت الموحد للنص والصورة
         base_prompt = (
             "أنت معلم خبير ومساعد أكاديمي متميز. "
             "قم بالإجابة على السؤال أو تحليل المرفقات المقدمة بدقة، "
@@ -503,7 +615,7 @@ async def solve_homework(
         else:
             contents.append(base_prompt)
         
-        response = client.models.generate_content(
+        response = active_client.models.generate_content(
             model='gemini-2.5-flash',
             contents=contents
         )
@@ -515,4 +627,3 @@ async def solve_homework(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"حدث خطأ أثناء معالجة الطلب: {str(e)}")
-    

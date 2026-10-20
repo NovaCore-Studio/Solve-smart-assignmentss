@@ -25,7 +25,7 @@ handler = app
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_KEY)
 
-# الواجهة البنفسجية الزجاجية (النسخة السليمة بدون أخطاء)
+# الواجهة البنفسجية الزجاجية مع ميزة فتح الكاميرا المباشرة
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -96,11 +96,11 @@ HTML_TEMPLATE = """
         .upload-section {
             border: 2px dashed rgba(192, 132, 252, 0.3);
             border-radius: 20px;
-            padding: 40px 20px;
+            padding: 30px 20px;
             cursor: pointer;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             background: rgba(15, 10, 30, 0.3);
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             box-shadow: inset 0 4px 10px rgba(0,0,0,0.2);
         }
         .upload-section:hover {
@@ -112,8 +112,8 @@ HTML_TEMPLATE = """
             display: none;
         }
         .upload-icon {
-            font-size: 2.5rem;
-            margin-bottom: 15px;
+            font-size: 2.2rem;
+            margin-bottom: 10px;
             display: inline-block;
         }
         .upload-label {
@@ -125,10 +125,35 @@ HTML_TEMPLATE = """
         }
         .upload-label span {
             display: block;
-            margin-top: 8px;
+            margin-top: 6px;
             font-size: 0.9rem;
             color: #74718a;
             font-weight: 400;
+        }
+        .actions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .action-btn {
+            background: rgba(192, 132, 252, 0.1);
+            border: 1px solid rgba(192, 132, 252, 0.3);
+            color: #f8fafc;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .action-btn:hover {
+            background: rgba(192, 132, 252, 0.2);
+            border-color: #c084fc;
         }
         .btn {
             background: linear-gradient(135deg, #6366f1, #a855f7);
@@ -155,6 +180,41 @@ HTML_TEMPLATE = """
             transform: none;
             color: #64748b;
         }
+        
+        /* تصميم نافذة الكاميرا المنبثقة */
+        #cameraModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 3, 15, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .camera-box {
+            background: #140d2b;
+            border: 1px solid rgba(192, 132, 252, 0.3);
+            padding: 25px;
+            border-radius: 24px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+        }
+        video {
+            width: 100%;
+            max-height: 350px;
+            border-radius: 14px;
+            background: #000;
+            object-fit: cover;
+            margin-bottom: 15px;
+        }
+        .cam-controls {
+            display: flex;
+            gap: 10px;
+        }
+
         .result-section {
             margin-top: 40px;
             text-align: right;
@@ -218,7 +278,7 @@ HTML_TEMPLATE = """
 <div class="container">
     <div class="brand">NovaCore Studio</div>
     <h1>مساعد حل الواجبات</h1>
-    <p class="subtitle">ارفع صورة المسألة وسيحلها الذكاء الاصطناعي بالتفصيل</p>
+    <p class="subtitle">ارفع صورة المسألة أو التقطها بالكاميرا وسيحلها الذكاء الاصطناعي بالتفصيل</p>
     
     <div class="upload-section" onclick="document.getElementById('fileInput').click()">
         <span class="upload-icon">🔮</span>
@@ -227,6 +287,16 @@ HTML_TEMPLATE = """
             <span id="fileNameDisplay">يدعم الامتدادات البصرية (PNG, JPG, JPEG)</span>
         </label>
         <input type="file" id="fileInput" accept="image/*" onchange="updateFileName(this)">
+    </div>
+
+    <!-- أزرار الاختيار الإضافية (كاميرا مباشرة) -->
+    <div class="actions-grid">
+        <button type="button" class="action-btn" onclick="openCameraModal()">
+            📷 افتح الكاميرا للتصوير
+        </button>
+        <button type="button" class="action-btn" onclick="document.getElementById('fileInput').click()">
+            📁 استعراض الملفات
+        </button>
     </div>
     
     <button class="btn" id="solveBtn" onclick="uploadAndSolve()">ابدأ الحل الان ✨</button>
@@ -242,7 +312,22 @@ HTML_TEMPLATE = """
     </div>
 </div>
 
+<!-- نافذة الكاميرا الحية -->
+<div id="cameraModal">
+    <div class="camera-box">
+        <h3 style="color: #c084fc; margin-bottom: 15px;">وجه الكاميرا نحو السؤال 📸</h3>
+        <video id="cameraStream" autoplay playsinline></video>
+        <canvas id="snapshotCanvas" style="display:none;"></canvas>
+        <div class="cam-controls">
+            <button type="button" class="btn" onclick="takeSnapshot()" style="background: linear-gradient(135deg, #22c55e, #16a34a);">التقاط الصورة 📸</button>
+            <button type="button" class="action-btn" onclick="closeCameraModal()" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4);">إغلاق</button>
+        </div>
+    </div>
+</div>
+
 <script>
+    let mediaStream = null;
+
     function updateFileName(input) {
         const display = document.getElementById('fileNameDisplay');
         if(input.files && input.files[0]) {
@@ -254,6 +339,51 @@ HTML_TEMPLATE = """
         }
     }
 
+    // فتح الكاميرا
+    async function openCameraModal() {
+        const modal = document.getElementById('cameraModal');
+        const video = document.getElementById('cameraStream');
+        modal.style.display = "flex";
+        try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+            video.srcObject = mediaStream;
+        } catch (err) {
+            alert("عذراً، لا يمكن الوصول للكاميرا. تأكد من إعطاء الصلاحية للمتصفح.");
+            closeCameraModal();
+        }
+    }
+
+    // غلق الكاميرا
+    function closeCameraModal() {
+        const modal = document.getElementById('cameraModal');
+        modal.style.display = "none";
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+        }
+    }
+
+    // التقاط الصورة من الفيديو وتحويلها لملف يقرأه الـ input
+    function takeSnapshot() {
+        const video = document.getElementById('cameraStream');
+        const canvas = document.getElementById('snapshotCanvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob(blob => {
+            const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            document.getElementById('fileInput').files = dataTransfer.files;
+            
+            // تحديث النص الظاهر
+            updateFileName(document.getElementById('fileInput'));
+            closeCameraModal();
+        }, 'image/jpeg');
+    }
+
     async function uploadAndSolve() {
         const fileInput = document.getElementById('fileInput');
         const solveBtn = document.getElementById('solveBtn');
@@ -262,7 +392,7 @@ HTML_TEMPLATE = """
         const resultBox = document.getElementById('resultBox');
         
         if(!fileInput.files || !fileInput.files[0]) {
-            alert('برجاء إرفاق صورة السؤال أولاً يا فنان!');
+            alert('برجاء إرفاق صورة السؤال أو تصويره بالكاميرا أولاً يا فنان!');
             return;
         }
         
@@ -288,8 +418,9 @@ HTML_TEMPLATE = """
                 alert("خطأ من السيرفر: " + (data.detail || "مشكلة غير معروفة"));
             }
         } catch (error) {
-            alert("فشل الاتصال، تأكد من تشغيل السيرفر في الـ CMD");
+            alert("فشل الاتصال، تأكد من تشغيل السيرفر أو الرفع السليم على Vercel");
         } finally {
+            solveBtn.disabled.disable = false;
             solveBtn.disabled = false;
             loadingArea.style.display = "none";
         }
@@ -315,12 +446,11 @@ async def solve_homework(file: UploadFile = File(...)):
         prompt = (
             "أنت معلم خبير ومساعد أكاديمي متميز. "
             "قم بتحليل الصورة المرفقة واستخراج السؤال أو المسألة منها بدقة، "
-            "ثم قدم الحل الصحيح والنموذجي خطوة بخطوة مع الشرح المفصل باللغة العربية واللهجة المصرية الشعبية الاصلية . "
+            "ثم قدم الحل الصحيح والنموذجي خطوة بخطوة مع الشرح المفصل باللغة العربية واللهجة المصرية الشعبية الاصطناعية . "
             "استخدم عناوين فرعية ونقاط واضحة وتنسيق Markdown غني (مثل استخدام النجوم للتأكيد) "
             "ليكون النص جذاباً وسهل القراءة والفهم."
         )
         
-        # تصليح اسم الموديل عشان يشتغل على الـ SDK الجديد بدون Error 404 الشهير
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[image, prompt]

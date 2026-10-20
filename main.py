@@ -1,6 +1,7 @@
 import os
 import io
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from typing import Optional
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
@@ -25,7 +26,7 @@ handler = app
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_KEY)
 
-# الواجهة البنفسجية الزجاجية مع ميزة فتح الكاميرا المباشرة
+# الواجهة البنفسجية الزجاجية مع ميزة الكاميرا وإرسال الرسائل النصية
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -90,13 +91,13 @@ HTML_TEMPLATE = """
         }
         p.subtitle {
             color: #94a3b8;
-            margin-bottom: 35px;
+            margin-bottom: 30px;
             font-size: 1.05rem;
         }
         .upload-section {
             border: 2px dashed rgba(192, 132, 252, 0.3);
             border-radius: 20px;
-            padding: 30px 20px;
+            padding: 25px 20px;
             cursor: pointer;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             background: rgba(15, 10, 30, 0.3);
@@ -112,24 +113,55 @@ HTML_TEMPLATE = """
             display: none;
         }
         .upload-icon {
-            font-size: 2.2rem;
-            margin-bottom: 10px;
+            font-size: 2rem;
+            margin-bottom: 8px;
             display: inline-block;
         }
         .upload-label {
             cursor: pointer;
             display: block;
-            font-size: 1.15rem;
+            font-size: 1.1rem;
             color: #e2e8f0;
             font-weight: 600;
         }
         .upload-label span {
             display: block;
-            margin-top: 6px;
-            font-size: 0.9rem;
+            margin-top: 5px;
+            font-size: 0.85rem;
             color: #74718a;
             font-weight: 400;
         }
+        
+        /* صندوق إدخال النص الجديد */
+        .text-input-section {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        .text-input-section label {
+            display: block;
+            margin-bottom: 8px;
+            color: #c084fc;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        textarea {
+            width: 100%;
+            background: rgba(15, 10, 30, 0.5);
+            border: 1px solid rgba(192, 132, 252, 0.3);
+            border-radius: 16px;
+            padding: 15px;
+            color: #f8fafc;
+            font-size: 1.05rem;
+            resize: vertical;
+            min-height: 100px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        textarea:focus {
+            border-color: #c084fc;
+            box-shadow: 0 0 10px rgba(192, 132, 252, 0.2);
+        }
+
         .actions-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -181,7 +213,6 @@ HTML_TEMPLATE = """
             color: #64748b;
         }
         
-        /* تصميم نافذة الكاميرا المنبثقة */
         #cameraModal {
             display: none;
             position: fixed;
@@ -278,32 +309,38 @@ HTML_TEMPLATE = """
 <div class="container">
     <div class="brand">NovaCore Studio</div>
     <h1>مساعد حل الواجبات</h1>
-    <p class="subtitle">ارفع صورة المسألة أو التقطها بالكاميرا وسيحلها الذكاء الاصطناعي بالتفصيل</p>
+    <p class="subtitle">اكتب سؤالك، ارفع صورته، أو التقطه بالكاميرا وسيحله الذكاء الاصطناعي فوراً</p>
     
+    <!-- صندوق إدخال النص الجديد -->
+    <div class="text-input-section">
+        <label for="questionText">💬 اكتب رسالتك أو سؤالك هنا:</label>
+        <textarea id="questionText" placeholder="اكتب سؤالك التفصيلي أو اطلب شرح مسألة معينة..."></textarea>
+    </div>
+
     <div class="upload-section" onclick="document.getElementById('fileInput').click()">
         <span class="upload-icon">🔮</span>
         <label class="upload-label">
-            اضغط هنا لرفع صورة السؤال
+            اضغط هنا لإرفاق صورة (اختياري)
             <span id="fileNameDisplay">يدعم الامتدادات البصرية (PNG, JPG, JPEG)</span>
         </label>
         <input type="file" id="fileInput" accept="image/*" onchange="updateFileName(this)">
     </div>
 
-    <!-- أزرار الاختيار الإضافية (كاميرا مباشرة) -->
+    <!-- أزرار الاختيار الإضافية (كاميرا واستعراض) -->
     <div class="actions-grid">
         <button type="button" class="action-btn" onclick="openCameraModal()">
-            📷 افتح الكاميرا للتصوير
+            📷 فتح الكاميرا للتصوير
         </button>
         <button type="button" class="action-btn" onclick="document.getElementById('fileInput').click()">
             📁 استعراض الملفات
         </button>
     </div>
     
-    <button class="btn" id="solveBtn" onclick="uploadAndSolve()">ابدأ الحل الان ✨</button>
+    <button class="btn" id="solveBtn" onclick="uploadAndSolve()">إرسال السؤال وحله ✨</button>
     
     <div class="loading" id="loadingArea">
         <div class="spinner"></div>
-        <span>جاري فك رموز الصورة واستخراج الحل النموذجي...</span>
+        <span>جاري تحليل السؤال وصياغة الحل النموذجي...</span>
     </div>
     
     <div class="result-section" id="resultSection">
@@ -339,7 +376,6 @@ HTML_TEMPLATE = """
         }
     }
 
-    // فتح الكاميرا
     async function openCameraModal() {
         const modal = document.getElementById('cameraModal');
         const video = document.getElementById('cameraStream');
@@ -353,7 +389,6 @@ HTML_TEMPLATE = """
         }
     }
 
-    // غلق الكاميرا
     function closeCameraModal() {
         const modal = document.getElementById('cameraModal');
         modal.style.display = "none";
@@ -363,7 +398,6 @@ HTML_TEMPLATE = """
         }
     }
 
-    // التقاط الصورة من الفيديو وتحويلها لملف يقرأه الـ input
     function takeSnapshot() {
         const video = document.getElementById('cameraStream');
         const canvas = document.getElementById('snapshotCanvas');
@@ -377,8 +411,6 @@ HTML_TEMPLATE = """
             const dataTransfer = new DataTransfer();
             dataTransfer.items.add(file);
             document.getElementById('fileInput').files = dataTransfer.files;
-            
-            // تحديث النص الظاهر
             updateFileName(document.getElementById('fileInput'));
             closeCameraModal();
         }, 'image/jpeg');
@@ -386,18 +418,22 @@ HTML_TEMPLATE = """
 
     async function uploadAndSolve() {
         const fileInput = document.getElementById('fileInput');
+        const questionText = document.getElementById('questionText').value.trim();
         const solveBtn = document.getElementById('solveBtn');
         const loadingArea = document.getElementById('loadingArea');
         const resultSection = document.getElementById('resultSection');
         const resultBox = document.getElementById('resultBox');
         
-        if(!fileInput.files || !fileInput.files[0]) {
-            alert('برجاء إرفاق صورة السؤال أو تصويره بالكاميرا أولاً يا فنان!');
+        if(!questionText && (!fileInput.files || !fileInput.files[0])) {
+            alert('برجاء كتابة سؤالك أو إرفاق/تصوير صورة على الأقل يا فنان!');
             return;
         }
         
         const formData = new FormData();
-        formData.append("file", fileInput.files[0]);
+        formData.append("text", questionText);
+        if(fileInput.files && fileInput.files[0]) {
+            formData.append("file", fileInput.files[0]);
+        }
         
         solveBtn.disabled = true;
         loadingArea.style.display = "block";
@@ -420,7 +456,6 @@ HTML_TEMPLATE = """
         } catch (error) {
             alert("فشل الاتصال، تأكد من تشغيل السيرفر أو الرفع السليم على Vercel");
         } finally {
-            solveBtn.disabled.disable = false;
             solveBtn.disabled = false;
             loadingArea.style.display = "none";
         }
@@ -435,25 +470,42 @@ async def get_ui():
     return HTML_TEMPLATE
 
 @app.post("/solve")
-async def solve_homework(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="الملف المرفوع يجب أن يكون صورة.")
+async def solve_homework(
+    text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    if not text and not file:
+        raise HTTPException(status_code=400, detail="يرجى إرسال نص السؤال أو صورة واحدة على الأقل.")
     
     try:
-        image_data = await file.read()
-        image = Image.open(io.BytesIO(image_data))
+        contents = []
         
-        prompt = (
+        # معالجة الصورة لو تم إرفاقها
+        if file and file.filename:
+            if not file.content_type.startswith("image/"):
+                raise HTTPException(status_code=400, detail="الملف المرفوع يجب أن يكون صورة.")
+            image_data = await file.read()
+            image = Image.open(io.BytesIO(image_data))
+            contents.append(image)
+        
+        # تجهيز البرومبت الموحد للنص والصورة
+        base_prompt = (
             "أنت معلم خبير ومساعد أكاديمي متميز. "
-            "قم بتحليل الصورة المرفقة واستخراج السؤال أو المسألة منها بدقة، "
-            "ثم قدم الحل الصحيح والنموذجي خطوة بخطوة مع الشرح المفصل باللغة العربية واللهجة المصرية الشعبية الاصطناعية . "
+            "قم بالإجابة على السؤال أو تحليل المرفقات المقدمة بدقة، "
+            "ثم قدم الحل الصحيح والنموذجي خطوة بخطوة مع الشرح المفصل باللغة العربية واللهجة المصرية الشعبية الأصلية[cite: 5]. "
             "استخدم عناوين فرعية ونقاط واضحة وتنسيق Markdown غني (مثل استخدام النجوم للتأكيد) "
             "ليكون النص جذاباً وسهل القراءة والفهم."
         )
         
+        if text:
+            full_prompt = f"{base_prompt}\n\nسؤال الطالب أو نصه:\n{text}"
+            contents.append(full_prompt)
+        else:
+            contents.append(base_prompt)
+        
         response = client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=[image, prompt]
+            contents=contents
         )
         
         return {
@@ -462,4 +514,5 @@ async def solve_homework(file: UploadFile = File(...)):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"حدث خطأ أثناء معالجة الصورة: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"حدث خطأ أثناء معالجة الطلب: {str(e)}")
+    

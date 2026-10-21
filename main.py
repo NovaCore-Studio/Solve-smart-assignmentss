@@ -1,16 +1,16 @@
 import os
 import io
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from PIL import Image
 
-# 1. تعريف الـ app في البداية خالص عشان Vercel يشوفه علطول أول ما يدخل الملف
+# 1. تعريف الـ app في البداية
 app = FastAPI(title="NovaCore مساعد حل الواجبات الذكي")
 
-# 2. تفعيل الـ CORS عشان فيرسل يقبل الطلبات من أي مكان وميجيبش أخطاء اتصال في المتصفح
+# 2. تفعيل الـ CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,13 +19,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. الـ handler لازم يكون بيشاور على الـ app بعد تعريفه بالظبط
+# 3. الـ handler لشغل Vercel
 handler = app
 
-# سحب المفتاح الأساسي من البيئة كخيار افتراضي
+# سحب المفتاح الأساسي كخيار افتراضي
 DEFAULT_GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 
-# الواجهة البنفسجية الزجاجية مع ميزة الكاميرا، إرسال الرسائل، وإضافة مفتاح الـ API الخاص
+# الواجهة البنفسجية الزجاجية
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -94,7 +94,6 @@ HTML_TEMPLATE = """
             font-size: 1.05rem;
         }
 
-        /* تصميم قسم إضافة الـ API الخاص بالمحاولات */
         .api-section {
             background: rgba(15, 10, 30, 0.4);
             border: 1px solid rgba(192, 132, 252, 0.2);
@@ -363,7 +362,6 @@ HTML_TEMPLATE = """
     <h1>مساعد حل الواجبات</h1>
     <p class="subtitle">اكتب سؤالك، ارفع صورته، أو التقطه بالكاميرا وسيحله الذكاء الاصطناعي فوراً</p>
     
-    <!-- قسم إضافة API للمحاولات المجانية -->
     <div class="api-section">
         <a href="https://aistudio.google.com/app/apikey" target="_blank" class="api-link">
             🔗 اضغط هنا لإنشاء مفتاح API جديد من جوجل (للمحاولات المجانية)
@@ -374,7 +372,6 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <!-- صندوق إدخال النص -->
     <div class="text-input-section">
         <label for="questionText">💬 اكتب رسالتك أو سؤالك هنا:</label>
         <textarea id="questionText" placeholder="اكتب سؤالك التفصيلي أو اطلب شرح مسألة معينة..."></textarea>
@@ -389,7 +386,6 @@ HTML_TEMPLATE = """
         <input type="file" id="fileInput" accept="image/*" onchange="updateFileName(this)">
     </div>
 
-    <!-- أزرار الاختيار الإضافية -->
     <div class="actions-grid">
         <button type="button" class="action-btn" onclick="openCameraModal()">
             📷 فتح الكاميرا للتصوير
@@ -412,7 +408,6 @@ HTML_TEMPLATE = """
     </div>
 </div>
 
-<!-- نافذة الكاميرا الحية -->
 <div id="cameraModal">
     <div class="camera-box">
         <h3 style="color: #c084fc; margin-bottom: 15px;">وجه الكاميرا نحو السؤال 📸</h3>
@@ -428,7 +423,6 @@ HTML_TEMPLATE = """
 <script>
     let mediaStream = null;
 
-    // استرجاع المفتاح المحفوظ لو موجود
     window.onload = function() {
         const savedKey = localStorage.getItem('user_gemini_api_key');
         if(savedKey) {
@@ -525,7 +519,7 @@ HTML_TEMPLATE = """
             const response = await fetch('/solve', {
                 method: 'POST',
                 headers: {
-                    'X-Custom-Api-Key': customKey
+                    'x-custom-api-key': customKey
                 },
                 body: formData
             });
@@ -558,40 +552,17 @@ async def get_ui():
 async def solve_homework(
     text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
-    x_custom_api_key: Optional[str] = None
-):
-    from fastapi import Request
-    # استقبال المفتاح من الهيدر لو المستخدم أدخله، وإلا يتم استخدام مفتاح النظام الافتراضي
-    # (لاحظ أن FastAPI بيستقبل الهيدر المخصص لو تم تمريره بطريقة صحيحة أو من خلال request)
-    pass
-
-@app.post("/solve")
-async def solve_homework(
-    request: FastAPI.requests.Request if "FastAPI" in str(FastAPI) else object, # حماية للتوافقية
-    text: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None)
-):
-    pass
-
-# إعادة كتابة الدالة بطريقة سليمة تضمن قراءة الهيدر بدقة وبدون أي أخطاء
-@app.post("/solve")
-async def solve_homework(
-    text: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    x_custom_api_key: Optional[str] = FastAPI.Header(None)
+    x_custom_api_key: Optional[str] = Header(None)
 ):
     if not text and not file:
         raise HTTPException(status_code=400, detail="يرجى إرسال نص السؤال أو صورة واحدة على الأقل.")
     
     try:
-        # تحديد المفتاح المستخدم (لو المستخدم حط مفتاح خاص بيه يشتغل بيه، لو لأ يرجع للمفتاح الأساسي)
-        active_key = x_custom_api_key if x_custom_api_key else DEFAULT_GEMINI_KEY
+        active_key = x_custom_api_key if (x_custom_api_key and x_custom_api_key.strip()) else DEFAULT_GEMINI_KEY
         if not active_key:
             raise HTTPException(status_code=400, detail="مفتاح الـ API غير موجود. يرجى إدخال مفتاح صالح.")
         
-        # تهيئة العميل بالمفتاح النشط
         active_client = genai.Client(api_key=active_key)
-
         contents = []
         
         if file and file.filename:
@@ -604,7 +575,7 @@ async def solve_homework(
         base_prompt = (
             "أنت معلم خبير ومساعد أكاديمي متميز. "
             "قم بالإجابة على السؤال أو تحليل المرفقات المقدمة بدقة، "
-            "ثم قدم الحل الصحيح والنموذجي خطوة بخطوة مع الشرح المفصل باللغة العربية واللهجة المصرية الشعبية الأصلية[cite: 5]. "
+            "ثم قدم الحل الصحيح والنموذجي خطوة بخطوة مع الشرح المفصل باللغة العربية واللهجة المصرية الشعبية الأصلية. "
             "استخدم عناوين فرعية ونقاط واضحة وتنسيق Markdown غني (مثل استخدام النجوم للتأكيد) "
             "ليكون النص جذاباً وسهل القراءة والفهم."
         )

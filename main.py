@@ -3,6 +3,7 @@ import io
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from PIL import Image
@@ -19,7 +20,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. الـ handler لشغل Vercel
+# 3. ربط مجلد الملفات الاستاتيكية (لقراءة الصورة من مجلد static في المشروع)
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 4. الـ handler لشغل Vercel
 handler = app
 
 # سحب المفتاح الأساسي كخيار افتراضي
@@ -33,6 +38,8 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NovaCore Studio | مساعد الواجبات الذكي</title>
+    <!-- أيقونة المتصفح في التبويب -->
+    <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -71,6 +78,15 @@ HTML_TEMPLATE = """
             max-width: 800px;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255,255,255,0.05);
             text-align: center;
+        }
+        .logo-img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 12px;
+            border: 2px solid rgba(192, 132, 252, 0.4);
+            box-shadow: 0 0 15px rgba(192, 132, 252, 0.3);
         }
         .brand {
             font-size: 0.9rem;
@@ -373,6 +389,8 @@ HTML_TEMPLATE = """
 <body>
 
 <div class="container">
+    <!-- اللوجو الخاص بالموقع -->
+    <img src="/static/logo.png" alt="Logo" class="logo-img" onerror="this.style.display='none'">
     <div class="brand">NovaCore Studio</div>
     <h1>مساعد حل الواجبات</h1>
     <p class="subtitle">اكتب سؤالك، ارفع صورته، أو التقطه بالكاميرا وسيحله الذكاء الاصطناعي فوراً</p>

@@ -41,6 +41,7 @@ HTML_TEMPLATE = """
     <meta name="monetag" content="942542734552006594c5d7ca3ed92da5">
     <script src="https://quge5.com/88/tag.min.js" data-zone="299598" async data-cfasync="false"></script>
     <script src="https://5gvci.com/act/files/tag.min.js?z=12087130" data-cfasync="false" async></script>
+    <script>(function(s){s.dataset.zone='12087151',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
     <!-- أيقونة المتصفح في التبويب -->
     <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">

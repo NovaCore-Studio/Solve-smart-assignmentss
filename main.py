@@ -118,9 +118,11 @@ HTML_TEMPLATE = """
         .api-input-group {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
         .api-input {
             flex: 1;
+            min-width: 200px;
             background: rgba(10, 7, 24, 0.6);
             border: 1px solid rgba(192, 132, 252, 0.3);
             border-radius: 12px;
@@ -136,7 +138,7 @@ HTML_TEMPLATE = """
             background: linear-gradient(135deg, #10b981, #059669);
             color: #fff;
             border: none;
-            padding: 10px 20px;
+            padding: 10px 18px;
             border-radius: 12px;
             font-weight: 600;
             cursor: pointer;
@@ -144,6 +146,19 @@ HTML_TEMPLATE = """
         }
         .api-save-btn:hover {
             opacity: 0.9;
+        }
+        .api-clear-btn {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #f87171;
+            padding: 10px 15px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .api-clear-btn:hover {
+            background: rgba(239, 68, 68, 0.4);
         }
 
         .upload-section {
@@ -369,6 +384,7 @@ HTML_TEMPLATE = """
         <div class="api-input-group">
             <input type="password" id="customApiKey" class="api-input" placeholder="الصق مفتاح الـ API هنا...">
             <button type="button" class="api-save-btn" onclick="saveApiKey()">أضف المفتاح ⚡</button>
+            <button type="button" class="api-clear-btn" onclick="clearApiKey()">حذف المفتاح 🗑️</button>
         </div>
     </div>
 
@@ -433,11 +449,17 @@ HTML_TEMPLATE = """
     function saveApiKey() {
         const keyVal = document.getElementById('customApiKey').value.trim();
         if(!keyVal) {
-            alert('برجاء كتابة أو لصق المفتاح أولاً!');
+            clearApiKey();
             return;
         }
         localStorage.setItem('user_gemini_api_key', keyVal);
-        alert('تم حفظ المفتاح بنجاح! المحاولات الجديدة هتشتغل بيه فوراً يا فنان 🚀');
+        alert('تم حفظ المفتاح بنجاح! المحاولات الجديدة هتشتغل بيه فوراً 🚀');
+    }
+
+    function clearApiKey() {
+        localStorage.removeItem('user_gemini_api_key');
+        document.getElementById('customApiKey').value = '';
+        alert('تم حذف المفتاح المخصص! الموقع هيرجع يستخدم المفتاح الافتراضي للسيرفر 🔄');
     }
 
     function updateFileName(input) {
@@ -515,12 +537,15 @@ HTML_TEMPLATE = """
         loadingArea.style.display = "block";
         resultSection.style.display = "none";
         
+        const headers = {};
+        if(customKey) {
+            headers['x-custom-api-key'] = customKey;
+        }
+        
         try {
             const response = await fetch('/solve', {
                 method: 'POST',
-                headers: {
-                    'x-custom-api-key': customKey
-                },
+                headers: headers,
                 body: formData
             });
             
